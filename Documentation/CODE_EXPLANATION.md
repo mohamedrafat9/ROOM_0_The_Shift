@@ -1,17 +1,19 @@
 # ROOM 0: THE SHIFT — Code Explanation
 
-> **Status:** `PlayerController.cs` is implemented. The other scripts described below are still planned and do not exist yet.
+> **Status:** `PlayerController.cs` and `DimensionSwitcher.cs` are implemented. The other scripts described below are still planned and do not exist yet.
 
-## 0. Current State After Phase 1 and Task 2
+## 0. Current State After Phase 1 and Tasks 2–3
 
-Phase 1 built the scene using **only Unity built-in components**. Task 2 added the first gameplay script.
+Phase 1 built the scene using **only Unity built-in components**. Task 2 added the first-person controller. Task 3 added the two dimensions and the dimension switcher.
 
 - Room geometry uses standard `Cube` primitives (`MeshFilter`, `MeshRenderer`, `BoxCollider`).
 - The three room materials use the built-in `Standard` shader with plain color values.
 - The player is a tagged empty GameObject with a manually configured `CharacterController`.
 - The camera is the original `Main Camera`, reparented under `Player` and renamed `PlayerCamera`.
 - Three point lights were added because the sealed ceiling blocks the directional light.
-- `Assets/Scripts/PlayerController.cs` now moves the player and rotates the camera using the new Input System.
+- `Assets/Scripts/PlayerController.cs` moves the player and rotates the camera using the new Input System.
+- `Assets/Scripts/DimensionSwitcher.cs` toggles `DimensionA_Root` and `DimensionB_Root` with Q after two safety checks.
+- `Environment/DimensionA_Root` and `Environment/DimensionB_Root` hold simple cyan and violet test objects. The room shell stays active in both dimensions.
 
 CharacterController values: `m_Height = 1.8`, `m_Radius = 0.35`, `m_Center = (0, 0.9, 0)`, `m_SlopeLimit = 45`, `m_StepOffset = 0.3`, `m_MinMoveDistance = 0`.
 
@@ -98,28 +100,64 @@ It is attached to the `Player` GameObject. It requires a `CharacterController` (
 
 Why `CharacterController` instead of a `Rigidbody`: it gives predictable walking, stair stepping, and simple ground checks without physics tuning.
 
-### DimensionSwitcher.cs
-**Job:** Handle Q, toggle the two dimension groups, and refuse unsafe switches.
+### DimensionSwitcher.cs — implemented
 
-Planned responsibilities:
-- Keep references to `DimensionA_Root` and `DimensionB_Root`.
-- Track the current dimension.
-- On Q: test whether switching is safe, then `SetActive()` the new group.
-- Tell the UI to show the dimension name and the "SHIFT BLOCKED" message.
+**File:** `Assets/Scripts/DimensionSwitcher.cs`
+**Job:** Switch between Dimension A and Dimension B with Q, but only when the destination is safe.
 
-Planned methods:
-- `TrySwitch()`
-- `bool IsSwitchSafe(Vector3 position)`
-- `SetDimension(bool useA)`
+It is attached to the `Player` GameObject and uses the same `CharacterController`.
 
-Simple safety approach (planned):
-1. Compute the player's feet and head points from the `CharacterController`.
-2. Temporarily enable the destination group and disable the current one.
-3. Call `Physics.SyncTransforms()` so physics queries see the change immediately.
-4. Run `Physics.CheckCapsule` at the player position and a short downward `Physics.Raycast` for ground support.
-5. If blocked, immediately revert the group states and show "SHIFT BLOCKED".
+**Inspector fields:**
 
-Trade-off: this is the easiest version to read and explain. It briefly changes active states inside one frame; if flicker or ordering problems appear, a later alternative is layer-based queries without toggling. Both dimensions need distinct layers for the cleaner version, which is **undecided**.
+| Field | Value | Purpose |
+|---|---|---|
+| `dimensionA` | `DimensionA_Root` | Environment objects active in Stable Reality |
+| `dimensionB` | `DimensionB_Root` | Environment objects active in Hybrid Reality |
+| `capsuleShrink` | 0.05 | Shrinks the tested capsule so touching a wall is not a false collision |
+| `footRayLength` | 0.3 | How far below the feet a floor still counts as support |
+| `footRaySpread` | 0.2 | Offset of the four extra foot-area rays from the centre ray |
+
+**Public result (for a future UI):**
+
+| Member | Meaning |
+|---|---|
+| `IsDimensionA` | `true` while Dimension A is active |
+| `LastSwitchSucceeded` | Result of the most recent Q attempt |
+| `LastBlockedReason` | Empty on success, otherwise a short reason such as `"Solid geometry in the other dimension."` |
+| `bool TrySwitch(out string reason)` | Runs one switch attempt and returns success/failure with a reason |
+
+`Update()` calls `TrySwitch()` when Q is pressed and the cursor is locked. On failure it logs `SHIFT BLOCKED: <reason>`. No UI is built yet.
+
+**Methods:**
+
+| Method | Purpose |
+|---|---|
+| `Awake()` | Caches the controller, builds the five foot-ray offsets, checks both roots are assigned |
+| `Start()` | Forces Dimension A active so the scene always starts consistently |
+| `Update()` | Reads Q, checks the cursor lock, calls `TrySwitch`, stores the result |
+| `TrySwitch(out string reason)` | Ground check, temporary toggle, overlap check, support check, commit or revert |
+| `SetDimension(bool useA)` | `SetActive` both roots and call `Physics.SyncTransforms()` |
+| `IsCapsuleBlocked()` | Overlap test at the player's current capsule |
+| `HasGroundBelow()` | Five downward rays around the feet |
+| `BuildFootRayOffsets()` | Fills the centre + four offset points once |
+
+**Safety algorithm (step by step):**
+
+1. If `controller.isGrounded` is false, refuse with `"No stable footing."`.
+2. Work out the target dimension and deactivate the current root / activate the target root.
+3. Call `Physics.SyncTransforms()` so the newly active colliders exist for queries.
+4. **Body check:** build the capsule in world space from `transform.TransformPoint(controller.center)`, `height`, and `radius`; shrink the radius by 5 cm. Run `Physics.OverlapCapsuleNonAlloc` with a cached 8-element array, ignoring triggers. Skip the player's own controller and its children. Any other collider means blocked.
+5. **Support check:** start just above the feet and cast five short rays down (centre plus four points 20 cm apart). If none hits within 30 cm, refuse with `"No supporting floor in the other dimension."`. At least one ray is enough, so standing near a ledge is not punished.
+6. On failure, restore the old root state and `Physics.SyncTransforms()` again; the player never moves.
+7. On success, remember the new dimension.
+
+**Why test after activating the target:** inactive colliders are not part of the physics scene, so there is nothing to query before activation. The toggle and the checks all happen inside one `Update`, before anything is drawn, so no flicker is visible. The CharacterController is not simulated until `Move()` runs, so it cannot fall while its floor is briefly inactive.
+
+**Why the capsule math uses `TransformPoint`:** `controller.center` is in the player's local space. Converting it with `TransformPoint` keeps the test correct even if the player is moved, rotated, or scaled. The capsule is upright, matching how CharacterController works.
+
+**Verified values (Play Mode):** successful A↔B switching, blocked solid obstacle, blocked missing floor, blocked while airborne, and a successful switch standing 0.1 m from a platform edge. Full numbers are in `IMPLEMENTATION_LOG.md`.
+
+**Known limits:** switching is grounded-only; the support test tolerates only about a 0.2 m step down; a player whose centre is off a ledge is usually not grounded, so that case is refused before the support test; triggers are ignored by both queries.
 
 ### Collectible.cs
 **Job:** Represent one Energy Fragment.
@@ -206,7 +244,7 @@ Six scripts are a suggestion. A simpler split is acceptable, for example merging
 - **Layer** — a 32-slot bitmask used for physics filtering and optional dimension checks.
 - **`SetActive(bool)`** — turns a GameObject (and its children) on or off. Used for dimension switching.
 - **`Physics.SyncTransforms()`** — forces the physics engine to see transform/active changes immediately.
-- **`Physics.CheckCapsule` / `Physics.Raycast`** — overlap and ground queries used for the safe-switch test.
+- **`Physics.OverlapCapsuleNonAlloc` / `Physics.Raycast`** — overlap and ground queries used for the safe-switch test; the non-alloc version avoids creating a new array on every switch.
 - **Quaternion / `Transform.Rotate`** — rotation representation; mouse look uses Euler angles with clamped pitch.
 - **Input System** — this project uses the new Input System only. Use `UnityEngine.InputSystem` (`Keyboard.current`, `Mouse.current`, or the generated actions asset).
 - **SceneManager** — loads the scene for restart.
@@ -214,20 +252,21 @@ Six scripts are a suggestion. A simpler split is acceptable, for example merging
 
 ## 3. Planned Input Actions
 
-The existing `InputSystem_Actions` asset already provides `Move`, `Look`, `Jump`, `Interact`, and `Cancel`. Two actions still need to be added during implementation:
+The existing `InputSystem_Actions` asset provides `Move`, `Look`, `Jump`, `Interact`, and `Cancel`. The player also reads Q and Esc directly with `Keyboard.current`; no `SwitchDimension` action was needed for this task.
 
-- `SwitchDimension` — bound to Q.
-- `Pause` — bound to Esc.
+Still planned:
+
+- `Pause` — bound to Esc. This will need to replace the current debug cursor-unlock behavior.
 
 Existing unused actions (`Attack`, `Crouch`, `Sprint`, `Previous`, `Next`) are not part of this game. Leave them or remove them only when the input work is actually being done.
 
-## 4. Data Flow (planned)
+## 4. Data Flow (current + planned)
 
 ```
 Input (WASD / Mouse / Space / E / Q / Esc)
         |
         v
-PlayerController ---- Q ----> DimensionSwitcher ----> Dimension A/B SetActive
+PlayerController ---- Q ----> DimensionSwitcher ----> Dimension A/B SetActive (implemented)
         |                            |
         |                            v
         |                        UIManager (dimension, SHIFT BLOCKED)
@@ -243,5 +282,5 @@ PlayerController ---- Q ----> DimensionSwitcher ----> Dimension A/B SetActive
 
 - Whether restart reloads the scene or resets state in place.
 - Whether E is polled by the player or by the door.
-- Whether dimension safety uses temporary toggling or dedicated layers.
 - Final method and field names.
+- How the pause menu will share Esc with the cursor-unlock behavior.

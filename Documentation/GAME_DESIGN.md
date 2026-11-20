@@ -1,6 +1,6 @@
 # ROOM 0: THE SHIFT — Game Design
 
-Status: design document, written before implementation. Nothing in this file is implemented yet unless explicitly stated.
+Status: design document. Movement and dimension switching are implemented (Tasks 2–3); puzzles, collectibles, UI, door, and kill zone are still planned.
 
 ## 1. Concept
 
@@ -21,7 +21,7 @@ The player presses **Q** to switch between two versions of the same room:
 
 Both dimensions use the same room shell and the same scene. There are **not** two scenes. Two groups of GameObjects are toggled with `SetActive()`.
 
-Switching is immediate. A switch is **blocked** when the destination would place the player inside solid geometry, or above a gap with no support. When blocked, the switch does not happen and the HUD shows a short **"SHIFT BLOCKED"** message.
+Switching is immediate and only allowed while the player is on the ground. A switch is **blocked** when the destination would place the player inside solid geometry, or when there is no floor below the feet. When blocked, the switch does not happen. The HUD will show **"SHIFT BLOCKED"**; until the HUD exists, the current build logs the reason to the Console and exposes it to future UI code.
 
 ## 3. Controls
 
@@ -66,7 +66,7 @@ Note: a 0.8 m jump under -9.81 m/s² gravity needs an initial vertical speed of 
 - Different platforms and paths.
 - Some objects appear or disappear between dimensions.
 
-Only visual/mesh objects change. The player, camera, UI, and global systems stay active in both dimensions.
+Only environment objects change, and those objects include their colliders. The player, camera, UI, shared room shell, and global systems stay active in both dimensions.
 
 ## 6. Room Layout
 

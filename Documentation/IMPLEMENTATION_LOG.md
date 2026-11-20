@@ -147,6 +147,60 @@ Known conflict to resolve later: Esc currently unlocks the cursor, but Esc is al
 
 ---
 
+## 2026-11-20 — Phase 1 / Task 3: Dimension System
+
+Approved scope: one `DimensionSwitcher.cs`, Q toggles Dimension A (Stable Reality) and Dimension B (Hybrid Reality), per-dimension environment objects, blocked switches when the target capsule overlaps solids or has no floor, no UI, no puzzles or collectibles.
+
+Actions:
+1. Created `Assets/Scripts/DimensionSwitcher.cs` and added it to `Player`.
+2. Created `Environment/DimensionA_Root` (active) and `Environment/DimensionB_Root` (inactive, empty at first).
+3. Added test objects:
+   - `A_Pad_Test` at `(-3, 0.15, 1)`, scale `(2, 0.3, 2)`, cyan `M_Room_Accent`.
+   - `A_HighPad_Test` at `(3, 0.15, -3)`, scale `(2, 0.3, 2)`, cyan.
+   - `B_Pad_Test` at `(-3, 0.15, 1)`, same size, new violet `M_DimensionB_Accent`.
+   - `B_Blocker_Test` at `(0, 1, -4)`, scale `(1.5, 2, 1.5)`, violet.
+4. Created `Assets/Materials/M_DimensionB_Accent.mat` (Standard shader, color `(0.22, 0.12, 0.46)`, smoothness 0.55, metallic 0.1).
+5. Assigned both roots on the switcher and saved `SampleScene.unity`.
+
+Implementation summary:
+- Q is read directly with `Keyboard.current.qKey.wasPressedThisFrame`; switching only runs while the cursor is locked.
+- `Start()` forces Dimension A active and Dimension B inactive, so the scene always starts consistently.
+- `TrySwitch(out string reason)` is public and returns success/failure. On failure it restores the old dimension and returns a short reason.
+- `LastSwitchSucceeded` and `LastBlockedReason` are public so a future UI can display "SHIFT BLOCKED" without any new architecture.
+- The target root is activated inside the same `Update` before checking, because inactive colliders cannot be queried. `Physics.SyncTransforms()` makes the new colliders visible to queries immediately.
+- The body test builds the capsule from `transform.TransformPoint(controller.center)` and the controller's height/radius, then calls `Physics.OverlapCapsuleNonAlloc` with a cached array and a 5 cm radius shrink. The player's own collider and children are skipped.
+- The support test uses five rays around the feet (centre + four points 20 cm apart) with a 30 cm length. Any hit counts, so ledges are not punished; a larger drop is blocked.
+- Switching is grounded-only. The player position, rotation, and camera pitch are never changed.
+
+Play Mode tests (Unity MCP):
+- Console after entering Play Mode: 0 errors, 0 warnings.
+- **Q on shared floor:** `grounded=True`, switched A→B, `LastSwitchSucceeded=True`.
+- **Q again on shared floor:** switched B→A, `LastSwitchSucceeded=True`.
+- **Edge of platform:** player placed at `(-2.1, 0.38, 1)`, 0.1 m inside `A_Pad_Test`; `grounded=True`; switch to B succeeded because the matching `B_Pad_Test` supports the feet.
+- **No supporting floor:** player on `A_HighPad_Test` at `(3, 0.38, -3)`; B has nothing within 30 cm below; switch refused with `"No supporting floor in the other dimension."`; A stayed active.
+- **Solid obstacle:** player at `(0, 0.08, -4)`; `B_Blocker_Test` occupies that space in B; switch refused with `"Solid geometry in the other dimension."`; A stayed active.
+- **Airborne:** after a jump, `grounded=False`, `y=0.82`; Q refused with `"No stable footing."`; A stayed active.
+- **Visual check:** captured the Game view in both states. A shows cyan pads; B hides them and shows the violet pad/blocker. Material check: `M_Room_Accent` vs `M_DimensionB_Accent`.
+- Left Play Mode; scene reported `isDirty: false` with Dimension A active and Dimension B inactive; final console 0 errors, 0 warnings.
+
+Test note: the Unity Editor did not keep OS focus during automation, which stopped normal keyboard input. The temporary harness set the Input System's editor background behavior to `IgnoreFocus`, injected the key state on the normal frame update, and restored the settings afterwards. Project settings were not changed. The harness files lived in `Temp/` and were deleted; no test scripts were added to `Assets/`.
+
+Not tested:
+- Human gamepad or keyboard play (Q only via injected key state).
+- Switching on slopes, steps, or moving platforms (none exist).
+- Puzzles, collectibles, UI, pause, kill zone, or door (out of scope).
+- Human comfort or how obvious the dimension change feels in motion.
+
+Known limitations:
+- Switching is intentional only while grounded; mid-air switching is refused.
+- The support test allows a step down of about 0.2 m and refuses larger drops.
+- A foot-area ray hit is enough for support; standing half over a ledge is treated according to the controller's grounded state.
+- Triggers are ignored by the safety checks, so fragments must not be placed on intended switch spots without re-testing.
+- There is no UI message yet, only `Debug.Log` and the public result fields.
+- The four test objects are placeholders, not puzzle content.
+
+---
+
 ## Tests Performed
 
 | Test | Result |
@@ -171,7 +225,15 @@ Known conflict to resolve later: Esc currently unlocks the cursor, but Esc is al
 | Mouse pitch limits | Pass — clamped at +80° and -80° |
 | Cursor lock / Esc / click | Pass — locked, unlocked, re-locked |
 | Play Mode console | Pass — 0 errors, 0 warnings |
-| Dimension switching, puzzles, UI, audio | **Not performed** — not implemented |
+| DimensionSwitcher compiles | Pass — no errors |
+| Q switches A → B on shared floor | Pass — B active, result `True` |
+| Q switches B → A on shared floor | Pass — A active, result `True` |
+| Switch near a platform edge | Pass — 0.1 m inside the edge, grounded, switched |
+| Switch blocked by solid geometry | Pass — refused, A stayed active, clear reason |
+| Switch blocked with no floor below | Pass — refused, A stayed active, clear reason |
+| Switch blocked while airborne | Pass — refused at y = 0.82, clear reason |
+| A/B visual distinction | Pass — cyan vs violet materials visible in captured Game view |
+| Puzzles, collectibles, UI, audio | **Not performed** — out of scope |
 
 ## Known Issues and Risks
 
@@ -186,3 +248,7 @@ Known conflict to resolve later: Esc currently unlocks the cursor, but Esc is al
 9. **Scene changes are uncommitted** (`Assets/Scenes/SampleScene.unity`, `Assets/Materials/`, `Assets/Scripts/`, `ProjectSettings/EditorBuildSettings.asset`).
 10. **Esc will conflict with the future pause menu.** The cursor handler currently owns Esc and must be integrated with pause later.
 11. **The player rests about 8 cm above the floor** due to CharacterController skin width; this is expected and visually minor.
+12. **Dimension test objects are placeholders.** `A_Pad_Test`, `A_HighPad_Test`, `B_Pad_Test`, and `B_Blocker_Test` are for verification only and should be replaced or repositioned when puzzles are built.
+13. **No on-screen feedback for a blocked shift.** The switcher exposes `LastSwitchSucceeded` / `LastBlockedReason` and logs to the console; the HUD message is still planned.
+14. **Switching is grounded-only and tolerates only a small step down.** Mid-air switches and larger drops are refused by design.
+15. **Scene and new assets are uncommitted.** The task did not request a commit.
