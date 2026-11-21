@@ -1,6 +1,6 @@
 # ROOM 0: THE SHIFT — Presentation Notes
 
-Use these notes to explain the project clearly. They describe the **design plus the current implementation state**; room blockout and the first-person controller are built, while dimensions, puzzles, and UI are still planned.
+Use these notes to explain the project clearly. They describe the **design plus the current implementation state**; the room blockout, first-person controller, and Q dimension switching are built, while puzzles, collectibles, and UI are still planned.
 
 ## 1. One-Sentence Summary
 
@@ -35,11 +35,12 @@ ROOM 0: THE SHIFT is a short first-person puzzle game set in a single sci-fi roo
 - Simple and predictable, which is important for platform puzzles.
 
 ### Dimension Switching
-- One scene, two root groups of GameObjects: `DimensionA_Root` and `DimensionB_Root`.
+- One scene, two root groups of GameObjects: `Environment/DimensionA_Root` and `Environment/DimensionB_Root`. The shared room shell stays active.
 - Q calls `SetActive(true)` on one group and `SetActive(false)` on the other.
-- The switch is immediate.
-- Before switching, the game checks whether the player would be inside geometry or over a gap in the destination dimension.
-- If unsafe, the switch is cancelled and the HUD briefly shows "SHIFT BLOCKED."
+- The switch is immediate and is allowed only while the CharacterController is grounded.
+- The destination root is activated, then two checks run: a world-space capsule overlap test for solid geometry, and five short downward rays around the feet for floor support.
+- If either check fails, the previous dimension is restored and the switch is cancelled. The code stores the reason and logs it; the HUD message "SHIFT BLOCKED" is planned with the UI.
+- Cyan test pads mark Dimension A and violet ones mark Dimension B, so the current state is obvious during testing.
 
 ### Collectibles
 - Each fragment has a trigger collider.
@@ -66,7 +67,7 @@ ROOM 0: THE SHIFT is a short first-person puzzle game set in a single sci-fi roo
 - **`SetActive` groups.** Simple and readable compared to custom culling systems.
 - **CharacterController.** Beginner-friendly first-person movement with built-in ground checks and collision.
 - **Trigger colliders.** Used for pickups, exit zone, and kill zone.
-- **Physics queries** (`CheckCapsule`, `Raycast`) for the safe-switch test.
+- **Physics queries** (`OverlapCapsuleNonAlloc`, `Raycast`) for the safe-switch test; the non-alloc form avoids per-switch garbage.
 - **New Input System.** The project is configured for it, so input goes through `UnityEngine.InputSystem`.
 - **Primitive art + lighting.** Atmosphere comes from color and light rather than expensive assets.
 - **Performance scope.** One small room, no post-processing stack, simple materials: suitable for an 8 GB MacBook Air M2.
@@ -83,10 +84,10 @@ Two parent GameObjects hold the objects for each dimension. Pressing Q toggles t
 It gives consistent walking, jumping, and slope behavior without physics tuning. Platform puzzles need predictable movement more than realistic physics.
 
 **How do you prevent the player from switching into a wall or into thin air?**
-Before the switch, the game temporarily enables the destination group and runs a capsule overlap check at the player's position plus a short downward ray for ground support. If either fails, it reverts the groups and shows "SHIFT BLOCKED."
+The switch is grounded-only. The game temporarily enables the destination group, builds a capsule from the CharacterController's world-space center, and checks it for solid overlaps. It also casts five short rays around the feet to confirm floor support. If either check fails, it reverts the groups and records the reason for the planned HUD message.
 
 **What does "SHIFT BLOCKED" mean?**
-The destination is unsafe: there is no room for the player, or nothing to stand on.
+The destination is unsafe: there is no room for the player, nothing to stand on, or the player is not grounded. In the current build the reason is logged to the Console; the on-screen message arrives with the UI.
 
 **Why only three fragments and three puzzles?**
 Scope control. A small number of well-made puzzles is better than a large unfinished game, especially for a solo university project.
@@ -108,10 +109,14 @@ Better puzzle readability, a short audio pass, smoother dimension transition eff
 
 ## 7. Demo Checklist
 
-Before presenting:
+Current build:
 - Confirm the scene is saved and added to Build Settings.
 - Confirm the console has no errors.
-- Test Q near a wall, over a gap, and in open space.
+- Test Q in open space (switch and switch back).
+- Test Q while looking at the violet blocker, on the high pad, and after jumping; all three should be refused.
+- Confirm the cyan/violet objects swap and shared walls stay in place.
+
+Final build:
 - Test all three fragments and the locked/unlocked door.
 - Test Esc pause and resume.
 - Test the kill zone and Restart.
@@ -122,5 +127,7 @@ Before presenting:
 - No audio yet unless added later.
 - No save system; the game is short by design.
 - Dimension switching is a visual swap, not a shader transition.
-- The safe-switch check is intentionally simple and may need tuning around edges.
-- Room blockout and puzzle placement may change during implementation.
+- The safe-switch check is intentionally simple and may need tuning around edges; it is grounded-only and allows only a small step down.
+- The blocked-switch message is not on screen yet; only the Console and future-facing result fields exist.
+- Dimension B currently shares the same room lighting as Dimension A, so it is distinguished mainly by object color.
+- Room blockout, test objects, and puzzle placement may change during implementation.

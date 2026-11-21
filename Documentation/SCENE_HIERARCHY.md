@@ -120,6 +120,5 @@ SampleScene
 - Dimension B is not visibly darker yet: it currently receives the same three shared point lights as Dimension A.
 - The interior is lit by three unshadowed point lights; expect flat but readable lighting.
 - The four dimension test objects are placeholders and are not part of the puzzle design.
-- The scene, `DimensionSwitcher.cs`, and `M_DimensionB_Accent.mat` are saved on disk but not committed to git yet.
 - The camera starts at the south end facing north (identity rotation), which matches the intended start direction.
 - `ProjectSettings/SceneTemplateSettings.json` appeared in the project during scene saving as an auto-generated Unity file; it is untracked and was not authored manually.

@@ -61,12 +61,13 @@ Read the relevant document before changing gameplay, scene layout, or UI.
 - Unity `6000.6.9f1`, built-in render pipeline (no URP).
 - Input handling: new Input System only (`activeInputHandler: 1`). Use `UnityEngine.InputSystem`; legacy `Input.GetKey` will not work.
 - One scene: `Assets/Scenes/SampleScene.unity`. It is saved and enabled in Build Settings at index 0.
-- Phase 1 room blockout exists: `Environment` root (12 × 18 × 5 m room, exit opening, three point lights) and `Player` root (CharacterController + `PlayerCamera` + `PlayerController`).
-- Materials: `Assets/Materials/M_Room_Floor.mat`, `M_Room_Wall.mat`, `M_Room_Accent.mat` (Standard shader).
+- Phase 1 room blockout exists: `Environment` root (12 × 18 × 5 m room, exit opening, three point lights) and `Player` root (CharacterController + `PlayerCamera` + `PlayerController` + `DimensionSwitcher`).
+- Task 3 dimension system exists: `Environment/DimensionA_Root` (active) and `Environment/DimensionB_Root` (inactive), Q switching with grounded-only collision/floor safety, and four placeholder test cubes.
+- Materials: `Assets/Materials/M_Room_Floor.mat`, `M_Room_Wall.mat`, `M_Room_Accent.mat`, `M_DimensionB_Accent.mat` (Standard shader).
 - The temporary `MCP_Test_Cube` was removed in Phase 1 with approval.
 - Tags available: `Respawn`, `Finish`, `MainCamera`, `Player`, `GameController`.
 - Existing input actions: `Move`, `Look`, `Jump`, `Interact`, `Cancel` (plus unused actions such as `Attack`, `Crouch`, `Sprint`).
-- `Assets/Scripts/PlayerController.cs` implements first-person movement, mouse look, jump, gravity, and cursor locking (Task 2). Prefabs, UI, and the other gameplay scripts do not exist yet.
+- `Assets/Scripts/PlayerController.cs` implements first-person movement, mouse look, jump, gravity, and cursor locking (Task 2). `Assets/Scripts/DimensionSwitcher.cs` implements Q dimension switching with `TrySwitch(out string reason)` (Task 3). Prefabs, UI, puzzles, collectibles, door, and kill zone do not exist yet.
 
 ## Implementation Workflow
 
@@ -79,10 +80,8 @@ Read the relevant document before changing gameplay, scene layout, or UI.
 7. Record real actions, results, and new issues in `Documentation/IMPLEMENTATION_LOG.md`.
 8. Stop and wait for approval before starting the next feature.
 
-## Planned Scope (approved design, not yet built)
+## Remaining Scope (approved design, not yet built)
 
-- Player: CharacterController first-person, speed 4.5, jump ~0.8 m, height 1.8 m, camera 1.6 m, gravity -9.81.
-- Dimensions: `DimensionA_Root` and `DimensionB_Root`, toggled with `SetActive()`; shared geometry in a common root.
-- Puzzles: missing platform, hidden passage, final switch.
+- Puzzles: missing platform, hidden passage, final switch, added inside the existing dimension roots.
 - Gameplay: 3 fragments, locked exit with E interaction, kill zone, win/lose, pause, start screen.
-- Scripts: at most about six small scripts (PlayerController, DimensionSwitcher, Collectible, GameManager, DoorController, UIManager).
+- Scripts: at most about six small scripts total (two exist: `PlayerController`, `DimensionSwitcher`; next: `Collectible`, `GameManager`, `DoorController`, `UIManager`).

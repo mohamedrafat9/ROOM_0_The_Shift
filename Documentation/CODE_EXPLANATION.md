@@ -147,7 +147,7 @@ It is attached to the `Player` GameObject and uses the same `CharacterController
 2. Work out the target dimension and deactivate the current root / activate the target root.
 3. Call `Physics.SyncTransforms()` so the newly active colliders exist for queries.
 4. **Body check:** build the capsule in world space from `transform.TransformPoint(controller.center)`, `height`, and `radius`; shrink the radius by 5 cm. Run `Physics.OverlapCapsuleNonAlloc` with a cached 8-element array, ignoring triggers. Skip the player's own controller and its children. Any other collider means blocked.
-5. **Support check:** start just above the feet and cast five short rays down (centre plus four points 20 cm apart). If none hits within 30 cm, refuse with `"No supporting floor in the other dimension."`. At least one ray is enough, so standing near a ledge is not punished.
+5. **Support check:** start just above the feet and cast five short rays down (centre plus four points 20 cm from the centre). If none hits within 30 cm, refuse with `"No supporting floor in the other dimension."`. At least one ray is enough, so standing near a ledge is not punished.
 6. On failure, restore the old root state and `Physics.SyncTransforms()` again; the player never moves.
 7. On success, remember the new dimension.
 
